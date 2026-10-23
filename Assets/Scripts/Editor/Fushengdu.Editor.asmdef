@@ -1,0 +1,14 @@
+{
+  "name": "Fushengdu.Editor",
+  "rootNamespace": "Fushengdu.Editor",
+  "references": [ "Fushengdu.Core", "Fushengdu.Gameplay", "Fushengdu.Network.Abstraction", "Fushengdu.Network.FishNet", "Fushengdu.UI", "FishNet.Runtime", "Unity.RenderPipelines.Universal.Runtime" ],
+  "includePlatforms": [ "Editor" ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

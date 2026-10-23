@@ -1,0 +1,45 @@
+# ===== Unity 生成物（绝不入库）=====
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+
+# Asset 的 .meta 必须入库（保证资源引用在 clone 后不丢）
+!/[Aa]ssets/**/*.meta
+
+# ===== IDE / 编辑器工程文件 =====
+ExportedObj/
+*.csproj
+*.unityproj
+*.sln
+*.sln.meta
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# ===== Unity 生成的崩溃报告 =====
+sysinfo.txt
+
+# ===== 构建产物 =====
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# ===== 本地 Agent 工作数据（非工程源码）=====
+.workbuddy/
+
+# ===== OS / 编辑器杂项 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+~$*

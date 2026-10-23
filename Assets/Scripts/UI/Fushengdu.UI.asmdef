@@ -1,0 +1,14 @@
+{
+  "name": "Fushengdu.UI",
+  "rootNamespace": "Fushengdu.UI",
+  "references": [ "Fushengdu.Core", "Fushengdu.Gameplay", "Fushengdu.Network.Abstraction" ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

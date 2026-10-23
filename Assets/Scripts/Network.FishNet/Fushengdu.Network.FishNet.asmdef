@@ -1,0 +1,14 @@
+{
+  "name": "Fushengdu.Network.FishNet",
+  "rootNamespace": "Fushengdu.Network.FishNet",
+  "references": [ "Fushengdu.Core", "Fushengdu.Gameplay", "Fushengdu.Network.Abstraction", "FishNet.Runtime" ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
