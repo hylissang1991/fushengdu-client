@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using FishNet;
+using FishNet.Component.Spawning;
 using FishNet.Managing;
 using FishNet.Object;
 using FishNet.Transporting;
@@ -87,6 +88,7 @@ namespace Fushengdu.Network.FishNet
                 // 服务端就绪后生成世界事件桥接（替代场景内 NetworkBridge，避免 65535 报错）
                 SpawnWorldBridge();
                 // 服务端就绪后按刷怪点标记生成怪物（场景内不再直接摆放怪物 NetworkObject）
+                AlignPlayerSpawnPoint();
                 SpawnWorldMonsters();
             }
             else if (args.ConnectionState == LocalConnectionState.Stopped)
@@ -177,11 +179,29 @@ namespace Fushengdu.Network.FishNet
         {
             if (NetworkManager == null) return;
             MonsterSpawnPoint[] points = FindObjectsOfType<MonsterSpawnPoint>();
+
+            // 兜底预制体：WorldArt 在运行期生成的那批刷怪点（村庄旁 5 只狼）没有 MonsterPrefab 引用，
+            // 而这个字段为空时下面会整点跳过 —— 离线路径不检查该字段，所以只有主机路径受害，
+            // 实测表现为「新手村旁一只怪都没有，最近的在 40m 外」（离线 20 只 / 主机 15 只）。
+            // 从场景里已配好 MonsterPrefab 的点借一个；NetworkManager 要求预制体已注册，
+            // 能借到就说明它本来就可生成。
+            GameObject fallbackPrefab = null;
+            for (int i = 0; i < points.Length; i++)
+            {
+                if (points[i] != null && points[i].MonsterPrefab != null)
+                {
+                    fallbackPrefab = points[i].MonsterPrefab;
+                    break;
+                }
+            }
+
             int total = 0;
             for (int i = 0; i < points.Length; i++)
             {
                 MonsterSpawnPoint sp = points[i];
-                if (sp == null || sp.MonsterPrefab == null) continue;
+                if (sp == null) continue;
+                GameObject prefab = sp.MonsterPrefab != null ? sp.MonsterPrefab : fallbackPrefab;
+                if (prefab == null) continue;
                 MonsterDef def = MonsterTable.Default.Get(sp.MonsterDefId);
                 if (def == null) continue;
 
@@ -191,7 +211,7 @@ namespace Fushengdu.Network.FishNet
                     if (sp.ScatterRadius > 0f)
                         at += new Vector3(UnityEngine.Random.Range(-sp.ScatterRadius, sp.ScatterRadius), 0f,
                                           UnityEngine.Random.Range(-sp.ScatterRadius, sp.ScatterRadius));
-                    GameObject instance = Instantiate(sp.MonsterPrefab, at, Quaternion.identity);
+                    GameObject instance = Instantiate(prefab, at, Quaternion.identity);
                     MonsterActor actor = instance.GetComponent<MonsterActor>();
                     // 服务端设置 MonsterDefId，NetActorSync.OnStartServer 会据此初始化并同步到客户端
                     if (actor != null) actor.MonsterDefId = sp.MonsterDefId;
@@ -202,6 +222,26 @@ namespace Fushengdu.Network.FishNet
                 }
             }
             if (total > 0) Debug.Log("[浮生渡] 主机模式：服务端生成怪物 " + total + " 只（来自刷怪点）");
+        }
+
+        /// <summary>
+        /// 把 FishNet 的玩家出生点对齐到 RespawnPointMarker —— 也就是离线单机用的同一个出生点。
+        /// 场景里 PlayerSpawner.Spawns[0] 是 (0,1.2,-10)，而 WorldArt.ApplySpawnPoint 把
+        /// RespawnPointMarker 挪到了广场北路口 (0,y+1.6,-7)。不对齐的话，
+        /// 主机模式出生在 -10、离线出生在 -7：同一个游戏两个出生点，取景也不对。
+        /// </summary>
+        private void AlignPlayerSpawnPoint()
+        {
+            // 注意：这版 FishNet 的 PlayerSpawner 不是 NetworkManager 的属性，是场景里的独立组件。
+            PlayerSpawner spawner = FindObjectOfType<PlayerSpawner>();
+            if (spawner == null || spawner.Spawns == null || spawner.Spawns.Length == 0) return;
+
+            RespawnPointMarker marker = FindObjectOfType<RespawnPointMarker>();
+            if (marker == null) return;
+
+            spawner.Spawns[0].position = marker.transform.position;
+            Debug.Log("[浮生渡] 主机模式：玩家出生点对齐到 RespawnPointMarker "
+                      + marker.transform.position.ToString("F1"));
         }
 
         private void OnClientState(ClientConnectionStateArgs args)

@@ -147,8 +147,8 @@ namespace Fushengdu.UI
             genderBtn.onClick.AddListener(() => { _female = !_female; RefreshGenderLabel(); });
             _genderLabel = UiKit.Label("男", root, 20, Color.white, new Vector2(500f, -275f), new Vector2(300f, 30f));
 
-            // 单机
-            var soloBtn = UiKit.Button("单机开始（离线可玩）", root, new Vector2(150f, -350f), new Vector2(260f, 52f), new Color(0.15f, 0.5f, 0.28f));
+            // 单机（本质 = 只有一个人加入的主机，与最终版同一条路径）
+            var soloBtn = UiKit.Button("单机开始（本机即主机）", root, new Vector2(150f, -350f), new Vector2(260f, 52f), new Color(0.15f, 0.5f, 0.28f));
             soloBtn.onClick.AddListener(StartSolo);
 
             // 主机
@@ -216,22 +216,21 @@ namespace Fushengdu.UI
             return int.TryParse(_portInput != null ? _portInput.text : "7770", out p) ? p : 7770;
         }
 
+        /// <summary>
+        /// 单机开始。
+        /// **它不是另一套逻辑，而是「只有一个人加入的主机」** —— 走的是与「创建主机（LAN）」
+        /// 完全相同的 FishNet Host 路径（HostSession → FishNetSession.StartHost）。
+        ///
+        /// 为什么必须这样：用户要求「单机版与最终版体验一致」。如果单机另起一套 OfflineSession，
+        /// 那它验的就永远是另一条代码；好友之后加入时，单机玩家等于要现场换一条路跑。
+        /// 让单机 = 一个人的主机，则单机玩家从一开始就在最终版那条路径上，
+        /// 好友加入只是「多一个客户端」，不需要任何切换、也不会有行为分叉。
+        /// </summary>
         public void StartSolo()
         {
             ApplySettings();
-            _launcher.SetActive(false);
-            _hud.SetActive(true);
-
-            var go = new GameObject("OfflineSession");
-            var session = go.AddComponent<OfflineSession>();
-            session.ClassId = (ClassId)NetLaunchSettings.ClassId;
-            session.Female = NetLaunchSettings.Female;
-            session.PlayerName = NetLaunchSettings.PlayerName;
-            session.StartLevel = NetLaunchSettings.StartLevel;
-            session.Begin();
-
-            BindLocalPlayer(session.Player);
-            ShowToast("单机模式：本机即权威端");
+            HostSession(PortValue());
+            ShowToast("单机模式：本机即主机（好友随时可直接加入）");
         }
 
         private void StartHost()

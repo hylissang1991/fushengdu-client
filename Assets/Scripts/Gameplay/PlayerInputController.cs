@@ -226,5 +226,14 @@ namespace Fushengdu.Gameplay
             _autoSaveTimer = 0f;
             SaveSystem.Save(Player.ToSaveData());
         }
+
+        /// <summary>
+        /// 退出时补一次存档。自动存档是 30 秒一轮，直接关窗口最多丢半分钟进度 ——
+        /// 单机试玩时「打完一只怪就退」这种最常见操作，正好落在丢失区间里。
+        /// </summary>
+        private void OnApplicationQuit()
+        {
+            if (Player != null) SaveSystem.Save(Player.ToSaveData());
+        }
     }
 }

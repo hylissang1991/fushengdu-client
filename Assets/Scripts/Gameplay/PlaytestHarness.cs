@@ -37,6 +37,15 @@ namespace Fushengdu.Gameplay
 
         private IEnumerator Start()
         {
+            // 自检必须跑在「新角色」上。本地存档会把上一次的任务进度带进来，
+            // 于是「接任务」永远显示 0 → 0，FAIL 得莫名其妙（实测踩过）。
+            // 这里显式删档，让每次自检的口径一致、也只测新玩家的第一小时。
+            if (SaveSystem.Exists())
+            {
+                SaveSystem.Delete();
+                Log("自检：检测到旧存档，已删除（保证从 1 级新角色开始）");
+            }
+
             // 先采样一段时间：出生点在头两秒里会不会被别的组件挪走，是这个位置追踪要抓的重点
             yield return Trace();
             yield return Run();
@@ -78,7 +87,7 @@ namespace Fushengdu.Gameplay
             yield return CheckMovement(player);
             CheckSkillBar(player);
             // 顺序很重要：先测任务（在出生点原地），再测战斗（会把玩家传送到怪身边）
-            CheckQuest(player);
+            yield return CheckQuest(player);
             yield return CastFailed(player);
 
             // BOSS / 团本终boss 渡银断言（无头试机扩展：-fdBossSilver 触发）
@@ -234,6 +243,30 @@ namespace Fushengdu.Gameplay
                 + "），距离出生点 " + bestDist.ToString("0.0") + " m —— "
                 + (bestDist <= 35f ? "OK（走两步就能打）" : "FAIL（玩家要跑太远才见到怪）"));
 
+            // 全怪物距离转储：单机（主机路径）与联机表现不一致时，靠它定位差在哪。
+            // 只打一行，避免刷屏；按距离升序取前 8 只。
+            System.Text.StringBuilder dump = new System.Text.StringBuilder();
+            dump.Append("怪物分布（玩家 ").Append(player.transform.position.ToString("F1")).Append("）：");
+            var dumpList = new System.Collections.Generic.List<MonsterActor>();
+            for (int i = 0; i < world.Actors.Count; i++)
+            {
+                var m = world.Actors[i] as MonsterActor;
+                if (m == null) continue;
+                dumpList.Add(m);
+            }
+            dumpList.Sort((a, b) => Vector3.Distance(player.transform.position, a.transform.position)
+                .CompareTo(Vector3.Distance(player.transform.position, b.transform.position)));
+            for (int i = 0; i < dumpList.Count && i < 8; i++)
+            {
+                MonsterActor m = dumpList[i];
+                dump.Append(" [").Append(i).Append("] ")
+                    .Append(m.Definition != null ? m.Definition.Name : "?").Append("@")
+                    .Append(m.transform.position.ToString("F1"))
+                    .Append(" d=").Append(Vector3.Distance(player.transform.position, m.transform.position).ToString("0.0"))
+                    .Append(m.IsDead ? "(死)" : "");
+            }
+            Log(dump.ToString());
+
             Core.SkillDef first = Core.SkillTable.Get(player.SkillBar != null && player.SkillBar.Length > 0
                 ? player.SkillBar[0] : Core.SkillId.None);
             if (first == null)
@@ -366,14 +399,19 @@ namespace Fushengdu.Gameplay
         }
 
         // ---------------------------------------------------------------- 6. 任务
-        private void CheckQuest(PlayerActor player)
+        /// <summary>
+        /// 必须是协程：主机/联机模式下 RequestInteract 走的是 ServerRpc（异步），
+        /// 交互结果要等一两个帧才回写到本地。原来这里立刻读任务数，
+        /// 离线路径（同步）能过、主机路径（异步）恒为 0 → FAIL。
+        /// </summary>
+        private IEnumerator CheckQuest(PlayerActor player)
         {
             var npcs = new List<NpcEntity>();
             foreach (KeyValuePair<int, NpcEntity> kv in NpcEntity.All()) npcs.Add(kv.Value);
             if (npcs.Count == 0)
             {
                 Log("NPC：0 个 —— FAIL");
-                return;
+                yield break;
             }
 
             NpcEntity npc = npcs[0];
@@ -389,8 +427,11 @@ namespace Fushengdu.Gameplay
             // 第一环是"对话型"：第 1 次 E 接任务，第 2 次 E 才推进并交付、接下一环。
             // 只按一次会误判成"接不了任务"，所以这里连按两次，完整验证链首。
             player.RequestInteract(npc.NpcId);
+            // 主机/联机：ServerRpc 异步，必须等帧；离线：同步，等一帧也无害。
+            yield return new WaitForSeconds(0.4f);
             int after1 = player.Quests.Active.Count;
             player.RequestInteract(npc.NpcId);
+            yield return new WaitForSeconds(0.4f);
             int after2 = player.Quests.Active.Count;
 
             // 用旧存档跑时 before 可能已经 >0（上一环还在进行），此时"第1次E交付、第2次E接下一环"，
@@ -400,7 +441,9 @@ namespace Fushengdu.Gameplay
             Log("接任务：进行中 " + before + " →(第1次E) " + after1 + " →(第2次E) " + after2
                 + " 条；" + DescribeQuests(player)
                 + " —— " + (gained || carried ? "OK" : "FAIL")
-                + (gained ? "" : "（旧存档已在任务链中，数量不变属正常）"));
+                // 只有「本来就有进行中任务」才可能数量不变，那才属正常；
+                // 新角色从 0 开始却接不到任务，是链路真断，必须红。
+                + (before > 0 && carried ? "（已有任务在身，数量不变属正常）" : ""));
         }
 
         private static string DescribeQuests(PlayerActor player)
