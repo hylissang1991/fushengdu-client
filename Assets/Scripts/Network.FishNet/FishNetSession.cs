@@ -142,6 +142,26 @@ namespace Fushengdu.Network.FishNet
 
             if (_role == NetRole.Host && world != null && world.Actors.Count == 0)
                 Debug.LogError("[自检] 联机告警：主机世界 Actor 数为 0 —— 服务端没有生成任何单位。");
+
+            // -fdNetProbe：让客户端发一次 RPC 探针，由服务端用自己的 world 验证这个 Id 能否命中。
+            // 这是 Id 链路的端到端证据（服务端 → 客户端回执也一并验证）。
+            if (HasArg("-fdNetProbe") && NetActorSync.LocalPlayer != null)
+            {
+                yield return new WaitForSeconds(1.0f);
+                Debug.Log("[自检] 联机探针：客户端发起 RPC 探针（marker=7）");
+                NetActorSync.LocalPlayer.ServerProbe(7);
+            }
+        }
+
+        private static bool HasArg(string flag)
+        {
+            string[] args;
+            try { args = System.Environment.GetCommandLineArgs(); }
+            catch { return false; }
+            if (args == null) return false;
+            for (int i = 0; i < args.Length; i++)
+                if (args[i] == flag) return true;
+            return false;
         }
 
         /// <summary>服务器就绪后生成世界事件桥接对象（替代原先直接摆进场景的 NetworkBridge，避免 65535 报错）。</summary>

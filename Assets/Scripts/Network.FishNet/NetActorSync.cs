@@ -223,6 +223,37 @@ namespace Fushengdu.Network.FishNet
             ApplyToState();
         }
 
+        /// <summary>
+        /// 联机自证探针：客户端 → 服务端 RPC，回显服务端真正认到的 ActorId。
+        /// 这是「客户端 ActorId 不为 0」这件事的端到端证据 ——
+        /// 不靠读本地变量，而是让服务端用自己的 world 去查这个 Id 能不能命中。
+        /// 由命令行参数 -fdNetProbe 触发（见 FishNetSession.LogNetState）。
+        /// </summary>
+        [ServerRpc]
+        public void ServerProbe(int marker)
+        {
+            CombatWorld w = CombatWorld.Instance;
+            int actorId = Entity != null ? Entity.ActorId : -1;
+            bool found = w != null && w.Get(actorId) != null;
+            Debug.Log("[自检] 联机探针（服务端收到）：marker=" + marker
+                + " 来自ClientId=" + (base.Owner != null ? base.Owner.ClientId.ToString() : "null")
+                + " ObjectId=" + base.ObjectId
+                + " ActorId=" + actorId
+                + " 服务端世界能查到=" + (found ? "是" : "否")
+                + " —— " + (actorId > 0 && found ? "OK" : "FAIL（Id 链路断了）"));
+            ObserversProbeAck(marker, actorId);
+        }
+
+        [ObserversRpc]
+        private void ObserversProbeAck(int marker, int actorId)
+        {
+            if (base.IsServerInitialized) return;
+            int localId = Entity != null ? Entity.ActorId : -1;
+            Debug.Log("[自检] 联机探针（客户端收到回执）：marker=" + marker
+                + " 服务端认得ActorId=" + actorId + " 本地ActorId=" + localId
+                + " —— " + (actorId > 0 && actorId == localId ? "OK（往返打通）" : "FAIL（两端 Id 不一致）"));
+        }
+
         /// <summary>技能请求：客户端只发「意图」（ADR-001 N-2/N-3）。</summary>
         [ServerRpc]
         private void ServerCast(int skillId, int targetObjectId)
