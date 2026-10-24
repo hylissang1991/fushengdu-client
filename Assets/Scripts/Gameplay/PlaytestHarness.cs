@@ -269,12 +269,54 @@ namespace Fushengdu.Gameplay
                     + " 角色朝向.z=" + player.transform.forward.z.ToString("0.00"));
             }
 
-            // 再打一次：验证不是"只能打一次"
-            hpBefore = monster.State.Hp;
+            // 再打一次：验证不是"只能打一次"。
+            //
+            // 【坑】首击若已把目标秒杀，绝不能拿这只死怪来判 —— 死怪血量恒为 0，
+            // 0→0 会稳定误报 FAIL，把真告警淹掉（这正是过去那条恒红假阳的来源）。
+            // 所以：先等首击的 GCD/冷却过去，再挑一只【活着】的怪来验证。
+            yield return new WaitForSeconds(1.2f);
+
+            MonsterActor second = monster.IsDead ? null : monster;
+            if (second == null)
+            {
+                float bd = float.MaxValue;
+                for (int i = 0; i < world.Actors.Count; i++)
+                {
+                    var m = world.Actors[i] as MonsterActor;
+                    if (m == null || m.IsDead) continue;
+                    float d = Vector3.Distance(player.transform.position, m.transform.position);
+                    if (d >= bd) continue;
+                    bd = d;
+                    second = m;
+                }
+            }
+
+            if (second == null)
+            {
+                // 无从验证，如实跳过 —— 不报 FAIL，避免恒定假阳
+                Log("二次释放：SKIP（首击已击杀目标，且场景内没有第二只活着的怪，无法验证连续释放）");
+                yield break;
+            }
+
+            if (second != monster)
+            {
+                Vector3 near2 = second.transform.position - new Vector3(0f, 0f, 2f);
+                near2.y = second.transform.position.y + 0.1f;
+                player.Teleport(near2);
+                yield return null;
+                player.SetTarget(second);
+                Log("二次释放：首击已击杀前一只，改用 " + second.name
+                    + "（" + (second.Definition != null ? second.Definition.Name : "?") + "）验证连续释放");
+            }
+
+            float hp2Before = second.State.Hp;
             player.RequestCast(first.Id);
             yield return new WaitForSeconds(0.4f);
-            Log("二次释放：血量 " + hpBefore.ToString("0.0") + " → " + monster.State.Hp.ToString("0.0")
-                + " —— " + (monster.State.Hp < hpBefore - 0.01f ? "OK" : "FAIL（可能被 GCD/冷却挡住，属正常；若两次都无伤害则是真 BUG）"));
+            float hp2After = second.State.Hp;
+            bool damaged2 = hp2After < hp2Before - 0.01f;
+            Log("二次释放：血量 " + hp2Before.ToString("0.0") + " → " + hp2After.ToString("0.0")
+                + " —— " + (damaged2 ? "OK（可连续释放）"
+                            : "FAIL（活目标在射程内却打不出伤害 —— 这是真 BUG）"));
         }
 
         // ---------------------------------------------------------------- 7. BOSS / 团本终boss 渡银断言
