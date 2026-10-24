@@ -48,6 +48,22 @@ namespace Fushengdu.Network.FishNet
         public override void OnStartNetwork()
         {
             Registry[base.ObjectId] = this;
+
+            if (Entity == null) Entity = GetComponent<ActorEntity>();
+            if (Entity == null || Entity.State == null) return;
+
+            // 【修复 联机-B1】ActorId 必须以 NetworkObject.ObjectId 为准，且【两端都要设】。
+            // 旧代码只在 OnStartServer 里设 Id，纯客户端的 ActorId 恒为 0 —— 实测确认。
+            // 危害：ServerCast / ServerInteract / ServerLootChoice / ServerEquip / ServerRespawn
+            // 五个 ServerRpc 全部拿 Entity.ActorId 当主键，0 会让服务端 world.Get(0) 返回 null，
+            // 客户端等于「连得上、但放不出技能 / 捡不了东西 / 复活不了」。
+            Entity.State.Id = base.ObjectId;
+
+            // 【修复 联机-B2】客户端也要进注册表，否则 world.Actors / world.Get() 在客户端恒空
+            // （实测：主机 16 个单位，纯客户端 0 个）。
+            // 注意：注册 ≠ 模拟 —— 客户端侧由 CombatWorld.IsAuthority=false 拦掉推进。
+            CombatWorld world = CombatWorld.Instance;
+            if (world != null) world.Register(Entity);
         }
 
         public override void OnStopNetwork()
@@ -85,6 +101,10 @@ namespace Fushengdu.Network.FishNet
         {
             if (Entity == null) Entity = GetComponent<ActorEntity>();
             if (Entity == null) return;
+
+            // 纯客户端进程不是权威端：本地 CombatWorld 只作为只读镜像（供 UI 查询），
+            // 绝不推进模拟 —— 否则会在客户端本地跑怪物 AI / 复活倒计时，与服务端权威结果分叉。
+            if (!base.IsServerInitialized) CombatWorld.IsAuthority = false;
 
             // 客户端监听怪物定义 Id 同步，用于拼装外观（场景外生成的预制体实例不携带运行时 MonsterDefId）
             if (Entity is MonsterActor)

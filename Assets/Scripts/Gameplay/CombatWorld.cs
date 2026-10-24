@@ -54,6 +54,15 @@ namespace Fushengdu.Gameplay
         public static CombatWorld Instance { get; private set; }
 
         /// <summary>
+        /// 本进程是否为「权威端」（离线单机 或 LAN 主机）。
+        /// 纯客户端必须置 false：本地 CombatWorld 只作为只读镜像，保存服务端同步过来的单位，
+        /// 供 UI 用 world.Get() / world.Actors 查询；但绝不推进模拟，
+        /// 否则会在客户端本地跑怪物 AI / 复活倒计时 / 掉落计时，与服务端权威结果分叉。
+        /// 由网络适配层（NetActorSync.OnStartClient）在确认非服务端时置 false；离线模式恒为 true。
+        /// </summary>
+        public static bool IsAuthority = true;
+
+        /// <summary>
         /// 当前激活的副本/团本掉落上下文（null = 非副本环境，走野外掉落表）。
         /// 进入副本时由 DungeonInstanceManager 赋值，退出时置 null。
         /// </summary>
@@ -157,6 +166,7 @@ namespace Fushengdu.Gameplay
         public void Tick(float dt)
         {
             if (dt <= 0f) return;
+            if (!IsAuthority) return; // 纯客户端：只持有单位镜像，不推进任何模拟
 
             _events.Clear();
 

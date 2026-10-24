@@ -101,6 +101,49 @@ namespace Fushengdu.Network.FishNet
             }
         }
 
+        /// <summary>
+        /// 联机自证日志：客户端连上后延迟取一次「连接 + 本地玩家 + 世界」快照。
+        /// 此前日志只有「已请求创建主机 / 已请求加入」，无法证明真的连上了，
+        /// 双端实跑拿不到任何可断言的证据 —— 这是本次补的核心观测点。
+        /// </summary>
+        private System.Collections.IEnumerator LogNetState()
+        {
+            // 等 PlayerSpawner 联网生成玩家、CombatWorld 完成注册
+            yield return new WaitForSeconds(2.5f);
+
+            NetworkManager nm = NetworkManager;
+            int clientCount = (nm != null && nm.ServerManager != null && nm.IsServerStarted)
+                ? nm.ServerManager.Clients.Count : -1;
+            PlayerActor local = LocalPlayerLocator.Current;
+            CombatWorld world = CombatWorld.Instance;
+
+            Debug.Log("[自检] 联机状态：角色=" + _role
+                + " 状态=" + _status
+                + " 端口=" + Port
+                + " 服务端=" + (nm != null && nm.IsServerStarted ? "已启动" : "未启动")
+                + " 客户端=" + (nm != null && nm.IsClientStarted ? "已启动" : "未启动")
+                + " 连接数=" + clientCount
+                + " 本地玩家=" + (local != null ? local.name : "null")
+                + " ActorId=" + (local != null ? local.ActorId.ToString() : "n/a")
+                + " 世界Actor数=" + (world != null ? world.Actors.Count.ToString() : "n/a"));
+
+            // 关键告警 ①：纯客户端若 ActorId 仍为 0，说明 Id 链路没同步过来。
+            // 后果：ServerCast/ServerInteract/ServerLootChoice/ServerEquip/ServerRespawn 五个
+            // ServerRpc 全以 Entity.ActorId 为主键，0 会让服务端 world.Get(0) 返回 null，
+            // 客户端等于「连得上、但放不出技能 / 捡不了东西 / 复活不了」。
+            if (local != null && local.ActorId == 0 && _role != NetRole.Host)
+                Debug.LogError("[自检] 联机告警：客户端本地玩家 ActorId=0 —— Id 链路未同步，"
+                    + "按 Id 过滤的逻辑（施法 / 交互 / 掉落 / 穿戴 / 复活）在客户端会全部失效。");
+
+            // 关键告警 ②：客户端世界为空 —— 说明同步过来的单位没进注册表，UI 枚举不到任何东西。
+            if (world != null && world.Actors.Count == 0 && _role != NetRole.Host)
+                Debug.LogError("[自检] 联机告警：客户端世界 Actor 数为 0 —— 单位未注册进本地 CombatWorld，"
+                    + "血条 / 目标 / 飘字等按 world 枚举的表现会全部空白。");
+
+            if (_role == NetRole.Host && world != null && world.Actors.Count == 0)
+                Debug.LogError("[自检] 联机告警：主机世界 Actor 数为 0 —— 服务端没有生成任何单位。");
+        }
+
         /// <summary>服务器就绪后生成世界事件桥接对象（替代原先直接摆进场景的 NetworkBridge，避免 65535 报错）。</summary>
         private void SpawnWorldBridge()
         {
@@ -148,6 +191,8 @@ namespace Fushengdu.Network.FishNet
                 _lastError = "";
                 if (_role != NetRole.Host) _role = NetRole.Client;
                 SetStatus(NetStatus.Connected);
+                // 联机自证：延迟取一次快照，证明「真的连上了」而不只是「已请求加入」
+                StartCoroutine(LogNetState());
             }
             else if (args.ConnectionState == LocalConnectionState.Stopped)
             {
