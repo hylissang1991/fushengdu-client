@@ -82,6 +82,8 @@ namespace Fushengdu.UI
         // 击杀飘字（渡银 +X）
         private Transform _floatLayer;
         private readonly List<FloatEntry> _floats = new List<FloatEntry>();
+        // 飘字生成计数（供无头 playtest 断言「渡银 +X」确实生成）：写入 CombatWorld.SilverFloatSpawned（Gameplay 程序集），
+        // 由 PlaytestHarness 读取，避免 Gameplay 反向依赖 UI。
         // 渡银飘字去重（主机双路径：① CombatWorld 直连 ② NetWorldBridge ObserversRpc）
         private int _lastSilverPlayer, _lastSilverAmount, _lastSilverX, _lastSilverY, _lastSilverZ;
         private float _lastSilverAt;
@@ -777,6 +779,8 @@ namespace Fushengdu.UI
             rt.sizeDelta = new Vector2(260f, 46f);
             rt.anchoredPosition = new Vector2(rx, ry);
             _floats.Add(new FloatEntry { Text = t, Age = 0f, BaseX = rx, BaseY = ry });
+            CombatWorld.SilverFloatSpawned++;
+            CombatWorld.LastSilverFloatText = "渡银 +" + amount;
         }
 
         /// <summary>每帧推进飘字：上飘 72 参考单位、1.15s 内淡出后销毁。</summary>

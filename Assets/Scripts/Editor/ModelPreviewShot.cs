@@ -50,18 +50,19 @@ namespace Fushengdu.Editor
             gm.color = new Color(0.34f, 0.42f, 0.26f);
             groundGo.GetComponent<Renderer>().sharedMaterial = gm;
 
+            // 离线 RT 里自定义 Stylized 材质会渲成全黑，这里强制覆盖成 URP Lit 保证出彩色剪影/上色
             float x = -6f;
-            RuntimeArt.AttachPlayerModel(Named("SwordCultivator", x), ClassId.SwordCultivator, false); x += 2.4f;
-            RuntimeArt.AttachPlayerModel(Named("Berserker", x), ClassId.Berserker, false); x += 2.6f;
-            RuntimeArt.AttachNpcModel(Named("NpcElder", x), false, "处者"); x += 2.4f;
-            RuntimeArt.AttachNpcModel(Named("NpcMerchant", x), true, "行商"); x += 2.4f;
+            var p1 = Named("SwordCultivator", x); RuntimeArt.AttachPlayerModel(p1, ClassId.SwordCultivator, false); Recolor(p1, new Color(0.85f, 0.74f, 0.52f)); x += 2.4f;
+            var p2 = Named("Berserker", x); RuntimeArt.AttachPlayerModel(p2, ClassId.Berserker, false); Recolor(p2, new Color(0.85f, 0.42f, 0.40f)); x += 2.6f;
+            var n1 = Named("NpcElder", x); RuntimeArt.AttachNpcModel(n1, false, "处者"); Recolor(n1, new Color(0.60f, 0.80f, 0.72f)); x += 2.4f;
+            var n2 = Named("NpcMerchant", x); RuntimeArt.AttachNpcModel(n2, true, "行商"); Recolor(n2, new Color(0.70f, 0.72f, 0.92f)); x += 2.4f;
 
             MonsterDef wolf = MonsterTable.Default.Get(1);
-            if (wolf != null) { GameObject g = Named("Wolf", x); RuntimeArt.AttachMonsterModel(g, wolf); } x += 2.6f;
+            if (wolf != null) { var g = Named("Wolf", x); RuntimeArt.AttachMonsterModel(g, wolf); Recolor(g, new Color(0.72f, 0.72f, 0.72f)); } x += 2.6f;
             MonsterDef bandit = MonsterTable.Default.Get(3);
-            if (bandit != null) { GameObject g = Named("Bandit", x); RuntimeArt.AttachMonsterModel(g, bandit); } x += 2.6f;
+            if (bandit != null) { var g = Named("Bandit", x); RuntimeArt.AttachMonsterModel(g, bandit); Recolor(g, new Color(0.80f, 0.68f, 0.46f)); } x += 2.6f;
             MonsterDef boar = MonsterTable.Default.Get(2);
-            if (boar != null) { GameObject g = Named("BoarKing", x); RuntimeArt.AttachMonsterModel(g, boar); }
+            if (boar != null) { var g = Named("BoarKing", x); RuntimeArt.AttachMonsterModel(g, boar); Recolor(g, new Color(0.58f, 0.48f, 0.40f)); }
 
             // 相机：正面平视，看全身
             int width = 1600, height = 700;
@@ -94,6 +95,27 @@ namespace Fushengdu.Editor
 
             // 丢弃临时场景，回到游戏场景
             EditorSceneManager.OpenScene("Assets/Scenes/NewcomerZone.unity", OpenSceneMode.Single);
+        }
+
+        /// <summary>
+        /// 把该物体下所有渲染器换成 URP Lit 并统一上色。
+        /// 原因：RuntimeArt 用的是自定义 Fushengdu/Stylized 材质，在离屏 RenderTexture 里会渲成全黑，
+        /// 取证图就分不清人形还是兽形。这里只影响本次预览，不改动任何工程资源。
+        /// </summary>
+        private static void Recolor(GameObject go, Color color)
+        {
+            if (go == null) return;
+            Material shared = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            if (shared == null) shared = new Material(Shader.Find("Standard"));
+            if (shared != null) shared.color = color;
+
+            Renderer[] rs = go.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < rs.Length; i++)
+            {
+                rs[i].sharedMaterial = shared;
+                rs[i].shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                rs[i].receiveShadows = false;
+            }
         }
 
         private static GameObject Named(string name, float x)

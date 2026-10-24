@@ -85,6 +85,10 @@ namespace Fushengdu.Gameplay
             if (HasFlag("-fdBossSilver"))
                 yield return CheckBossSilver(player);
 
+            // 渡银飘字实跑校验（-fdBossSilver / -fdSilverFloat 触发）：确认击杀/到账飘字真的生成
+            if (HasFlag("-fdBossSilver") || HasFlag("-fdSilverFloat"))
+                yield return CheckSilverFloat(player);
+
             Log("=== 自动试机结束 ===");
         }
 
@@ -291,6 +295,32 @@ namespace Fushengdu.Gameplay
             Log("团本终boss 渡银：Lv55 团本终boss 击杀，Δ银=" + actual + "，期望 " + expected + " —— " + (okRaid ? "OK" : "FAIL"));
 
             Log("BOSS / 团本终boss 渡银断言：" + (okBoss && okRaid ? "全部 OK" : "FAIL"));
+        }
+
+        // ---------------------------------------------------------------- 7b. 渡银飘字实跑校验
+        private IEnumerator CheckSilverFloat(PlayerActor player)
+        {
+            CombatWorld world = CombatWorld.Instance;
+            if (world == null)
+            {
+                Log("战斗世界：不存在 —— FAIL（飘字校验跳过）");
+                yield break;
+            }
+
+            // 快照触发前的飘字计数，避免被前面 BOSS 击杀的飘字干扰
+            int before = CombatWorld.SilverFloatSpawned;
+
+            // 走统一事件入口 RaiseSilverGained（与击杀 / 任务交付同一条路径），
+            // 模拟一次「渡银到账」；锚点取玩家头顶，贴近真实击杀飘字位置
+            Vector3 at = player.transform.position + Vector3.up * 1.4f;
+            world.RaiseSilverGained(player.ActorId, 123, at);
+            yield return null; // 让 UpdateFloatingTexts 至少跑一帧，确认不被立刻销毁
+
+            int after = CombatWorld.SilverFloatSpawned;
+            string txt = CombatWorld.LastSilverFloatText ?? "";
+            bool ok = after > before && txt.IndexOf("渡银 +") >= 0;
+            Log("渡银飘字：触发前 " + before + " → 触发后 " + after + " 枚；末枚文本=\"" + txt + "\" —— "
+                + (ok ? "OK（击杀/到账飘字确已生成，肉眼可见路径已通）" : "FAIL（飘字未生成）"));
         }
 
         // ---------------------------------------------------------------- 6. 任务

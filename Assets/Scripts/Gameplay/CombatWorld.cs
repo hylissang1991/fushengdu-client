@@ -83,6 +83,11 @@ namespace Fushengdu.Gameplay
         public event System.Action<int, int> OnItemGranted;       // (playerActorId, itemDefId)
         public event System.Action<int, int, Vector3> OnSilverGained; // (playerActorId, 渡银, 击杀位置)
 
+        // 渡银飘字实跑计数（无头 playtest 校验用）：由 UI 层 SpawnSilverFloat 写入，Gameplay 层 PlaytestHarness 读取。
+        // 放在 Gameplay 程序集（而非 UI），避免 Gameplay 反向依赖 UI（架构要求单向：UI → Gameplay）。
+        public static int SilverFloatSpawned;
+        public static string LastSilverFloatText;
+
         /// <summary>统一触发渡银到账事件（击杀 / 任务交付共用），供外部（如 NetWorldBridge）调用。</summary>
         public void RaiseSilverGained(int playerActorId, int silver, Vector3 worldPos)
         {

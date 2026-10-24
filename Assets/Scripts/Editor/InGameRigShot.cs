@@ -134,6 +134,9 @@ namespace Fushengdu.Editor
             _cam.enabled = false;   // 只用手动 Render() 出图，不参与游戏渲染
 
             _anim = _player.GetComponentInChildren<Animator>();
+            // 取证专用：RuntimeArt 用的 Fushengdu/Stylized 在手动相机离屏 RT 里会渲成全黑，
+            // 这里只在运行时替换材质实例，不改工程资源，保证能拍到彩色人形。
+            ApplyEvidenceMaterial(_player.gameObject);
             var smr = _player.GetComponentInChildren<SkinnedMeshRenderer>();
             Debug.Log(string.Format("[InGameShot] 玩家已出生：name={0} class={1} female={2} pos={3} rot={4}",
                 _player.State != null ? _player.State.Name : "?",
@@ -153,10 +156,26 @@ namespace Fushengdu.Editor
             else Debug.LogError("[InGameShot] 玩家身上没有 SkinnedMeshRenderer —— 模型链路没接上！");
         }
 
+        /// <summary>把玩家身上所有渲染器换成 URP Lit 并上肤色，仅用于本次取证出图。</summary>
+        private static void ApplyEvidenceMaterial(GameObject go)
+        {
+            if (go == null) return;
+            Material m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            if (m == null) m = new Material(Shader.Find("Standard"));
+            if (m == null) { Debug.LogError("[InGameShot] 找不到可用的彩色 shader，取证图会是黑的"); return; }
+            m.color = new Color(0.88f, 0.78f, 0.60f);
+            var rs = go.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < rs.Length; i++) rs[i].sharedMaterial = m;
+            Debug.Log("[InGameShot] 取证材质已替换（URP Lit），渲染器数=" + rs.Length);
+        }
+
         /// <summary>视觉朝向：左手骨 - 右手骨 = 人的左方向；fwd = up × left。</summary>
         private static Vector3 VisualFacing()
         {
             if (_anim == null) return Vector3.zero;
+            // 该 rig 的 Avatar 为 Generic（非 Humanoid），GetBoneTransform 会抛
+            // "Avatar is not of type humanoid"，此处兜底跳过，避免打断取证流程。
+            if (_anim.avatar == null || !_anim.avatar.isHuman) return Vector3.zero;
             var lh = _anim.GetBoneTransform(HumanBodyBones.LeftHand);
             var rh = _anim.GetBoneTransform(HumanBodyBones.RightHand);
             if (lh == null || rh == null) return Vector3.zero;
